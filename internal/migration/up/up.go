@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/jackc/pgconn"
@@ -19,11 +20,16 @@ var (
 	errMissingLocal  = errors.New("Remote migration versions not found in " + utils.MigrationsDir + " directory.")
 )
 
-func Run(ctx context.Context, includeAll bool, fsys afero.Fs, options ...func(*pgx.ConnConfig)) error {
+func Run(ctx context.Context, includeAll bool, config pgconn.Config, fsys afero.Fs, options ...func(*pgx.ConnConfig)) error {
 	if err := utils.LoadConfigFS(fsys); err != nil {
 		return err
 	}
-	conn, err := utils.ConnectLocalPostgres(ctx, pgconn.Config{}, options...)
+	if config.Host != "localhost" {
+		if shouldUp := utils.PromptYesNo("Confirm migrating the remote database?", true, os.Stdin); !shouldUp {
+			return context.Canceled
+		}
+	}
+	conn, err := utils.ConnectByConfig(ctx, config, options...)
 	if err != nil {
 		return err
 	}
